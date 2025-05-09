@@ -1,55 +1,93 @@
 import streamlit as st
+import pandas as pd
 import requests
 from imdb import IMDb
 
-# OMDb API URL and API Key (You'll need to get an API key from https://www.omdbapi.com/)
+# OMDb API Key (Get your API key from https://www.omdbapi.com/)
 OMDB_API_KEY = 'a7defab1'
 OMDB_BASE_URL = "http://www.omdbapi.com/"
 
-# Function to fetch movie data from OMDb API
-def get_movie_data(movie_name):
-    url = f"{OMDB_BASE_URL}?t={movie_name}&apikey={OMDB_API_KEY}"
+# Function to fetch IMDb rating
+def get_imdb_rating(movie_name):
+    ia = IMDb()
+    movies = ia.search_movie(movie_name)
+    if movies:
+        movie_id = movies[0].movieID
+        movie = ia.get_movie(movie_id)
+        return movie.get('rating', 'N/A')
+    return 'N/A'
+
+# Fetch related movies using OMDb API
+def get_related_movies(movie_name):
+    url = f"{OMDB_BASE_URL}?s={movie_name}&apikey={OMDB_API_KEY}"
     response = requests.get(url)
     data = response.json()
-    return data
+    return data.get('Search', []) if data.get('Response') == 'True' else []
 
-# Function to fetch IMDb rating
-def get_imdb_rating(movie_id):
-    ia = IMDb()
-    movie = ia.get_movie(movie_id)
-    return movie.get('rating', 'N/A')
+# Read movie data from CSV
+@st.cache
+def load_movie_data():
+    return pd.read_csv("movies.csv")
 
 # Streamlit app UI setup
-st.title("Netflix Styled Streamlit App")
+st.title("Netflix Styled Streamlit App with Movie Recommendations")
 
-# Sidebar for movie selection
-movie_name = st.sidebar.text_input("Enter Movie Name", "Inception")
-if movie_name:
-    data = get_movie_data(movie_name)
+# Load movie data
+movie_data = load_movie_data()
 
-    if data.get("Response") == "True":
-        # Display movie poster and details
-        st.image(data['Poster'], use_column_width=True)
-        st.header(f"{data['Title']} ({data['Year']})")
-        st.write(f"**Genre**: {data['Genre']}")
-        st.write(f"**Director**: {data['Director']}")
-        st.write(f"**Plot**: {data['Plot']}")
+# Sidebar for movie selection (by title)
+movie_name = st.sidebar.selectbox("Select a Movie", movie_data['Title'])
 
-        # IMDb rating (using IMDbPY)
-        ia = IMDb()
-        movie_id = ia.search_movie(data['Title'])[0].movieID
-        imdb_rating = get_imdb_rating(movie_id)
-        st.write(f"**IMDb Rating**: {imdb_rating}/10")
-    else:
-        st.error("Movie not found, try a different title.")
+# Display selected movie details
+selected_movie = movie_data[movie_data['Title'] == movie_name].iloc[0]
+
+# Display movie poster and details
+st.image(selected_movie['Poster'], use_column_width=True)
+st.header(f"{selected_movie['Title']} ({selected_movie['Year']})")
+st.write(f"**Genre**: {selected_movie['Genre']}")
+st.write(f"**Director**: {selected_movie['Director']}")
+st.write(f"**Plot**: {selected_movie['Plot']}")
+
+# IMDb rating (using IMDbPY)
+imdb_rating = get_imdb_rating(selected_movie['Title'])
+st.write(f"**IMDb Rating**: {imdb_rating}/10")
+
+# Movie Recommendation based on Genre from CSV
+genre = selected_movie['Genre']
+st.subheader(f"Movies similar to {selected_movie['Title']} in the '{genre}' genre:")
+
+# Filter movies by the selected genre
+recommended_movies = movie_data[movie_data['Genre'] == genre]
+
+# Show top 3 recommended movies from CSV
+for index, movie in recommended_movies.head(3).iterrows():
+    st.image(movie['Poster'], width=120)
+    st.write(f"**{movie['Title']}** ({movie['Year']})")
+    st.write(f"Genre: {movie['Genre']}")
+    st.write(f"IMDb Rating: {get_imdb_rating(movie['Title'])}/10")
+    st.markdown("---")
+
+# Fetch related movies from OMDb API based on the selected movie
+st.subheader(f"Other movies you might like based on {selected_movie['Title']}:")
+
+related_movies = get_related_movies(selected_movie['Title'])
+
+# Show related movies from OMDb API
+for movie in related_movies[:5]:  # Limit to top 5 results
+    st.image(movie['Poster'], width=120)
+    st.write(f"**{movie['Title']}** ({movie.get('Year', 'N/A')})")
+    st.write(f"Genre: {movie.get('Type', 'N/A')}")
+    st.write(f"IMDb Rating: {get_imdb_rating(movie['Title'])}/10")
+    st.markdown("---")
+
+# Add CSS transition effects for hover
 st.markdown("""
     <style>
-        .movie-container {
-            transition: all 0.5s ease;
+        .stImage {
+            transition: transform 0.3s ease-in-out;
         }
-        .movie-container:hover {
+        .stImage:hover {
             transform: scale(1.05);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
     </style>
 """, unsafe_allow_html=True)
