@@ -1,56 +1,56 @@
 import streamlit as st
 import pandas as pd
+import random
 
-# Sample movie data
-data = {
-    "title": [
-        "Inception", "The Matrix", "Interstellar", "The Dark Knight", "Fight Club",
-        "Forrest Gump", "The Shawshank Redemption", "The Godfather", "Pulp Fiction", "The Lord of the Rings"
-    ],
-    "poster_url": [
-        "https://image.tmdb.org/t/p/w500/qmDpIHrmpJINaRKAfWQfftjCdyi.jpg",
-        "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
-        "https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg",
-        "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
-        "https://image.tmdb.org/t/p/w500/bptfVGEQuv6vDTIMVCHjJ9Dz8PX.jpg",
-        "https://image.tmdb.org/t/p/w500/saHP97rTPS5eLmrLQEcANmKrsFl.jpg",
-        "https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmt0fjIBkYqY1OYu.jpg",
-        "https://image.tmdb.org/t/p/w500/eEslKSwcqmiNS6va24Pbxf2UKmJ.jpg",
-        "https://image.tmdb.org/t/p/w500/dM2w364MScsjFf8pfMbaWUcWrR.jpg",
-        "https://image.tmdb.org/t/p/w500/56zTpe2xvaA4alU51sRWPoKPYZy.jpg"
-    ],
-    "genre": [
-        "Sci-Fi", "Action", "Sci-Fi", "Action", "Drama",
-        "Drama", "Drama", "Crime", "Crime", "Fantasy"
-    ],
-    "trailer_url": [
-        "https://www.youtube.com/watch?v=8hP9D6kZseM",
-        "https://www.youtube.com/watch?v=vKQi3bBA1y8",
-        "https://www.youtube.com/watch?v=zSWdZVtXT7E",
-        "https://www.youtube.com/watch?v=EXeTwQWrcwY",
-        "https://www.youtube.com/watch?v=SUXWAEX2jlg",
-        "https://www.youtube.com/watch?v=bLvqoHBptjg",
-        "https://www.youtube.com/watch?v=6hB3S9bIaco",
-        "https://www.youtube.com/watch?v=sY1S34973zA",
-        "https://www.youtube.com/watch?v=s7EdQ4FqbhY",
-        "https://www.youtube.com/watch?v=V75dMMIW2B4"
-    ]
-}
+# Load data
+@st.cache_data
+def load_data():
+    df = pd.read_csv("movies.csv")
+    df = df.dropna(subset=['genres', 'title', 'vote_average', 'overview'])
+    return df
 
-# Convert to DataFrame
-df = pd.DataFrame(data)
+df = load_data()
 
-# Streamlit UI
+# UI Configuration
 st.set_page_config(layout="wide")
-st.title("Netflix-Style Movie Recommender")
+st.title("🎬 MovieFlix - Genre-Based Recommendations")
 
-st.subheader("Popular Movies")
+# Genre Dropdown
+all_genres = sorted(set(g.strip() for sublist in df['genres'].dropna().str.split() for g in sublist))
+selected_genre = st.selectbox("Choose a Genre", all_genres)
 
-# Display movies in a grid
+# Filter movies by genre
+filtered_df = df[df['genres'].str.contains(selected_genre, case=False, na=False)].reset_index(drop=True)
+
+# Randomize and limit for display
+filtered_df = filtered_df.sample(frac=1).head(20)
+
+st.markdown(f"### Movies in **{selected_genre}** Genre")
+
+# Show movies in horizontal rows (Netflix-style)
 cols = st.columns(5)
-for index, movie in df.iterrows():
-    with cols[index % 5]:
-        st.image(movie["poster_url"], use_column_width=True)
+for i, movie in filtered_df.iterrows():
+    with cols[i % 5]:
+        st.image(f"https://via.placeholder.com/300x450?text={movie['title']}", use_column_width=True)
         st.markdown(f"**{movie['title']}**")
-        st.caption(f"Genre: {movie['genre']}")
-        st.markdown(f"[Watch Trailer]({movie['trailer_url']})")
+        st.caption(f"⭐ {movie['vote_average']}")
+        st.caption(movie['overview'][:100] + "...")
+
+# Recommendations based on average rating in genre
+st.markdown("---")
+st.markdown(f"### 🔥 Top Recommended {selected_genre} Movies")
+
+top_recommendations = (
+    df[df['genres'].str.contains(selected_genre, case=False, na=False)]
+    .sort_values(by="vote_average", ascending=False)
+    .drop_duplicates(subset='title')
+    .head(10)
+)
+
+rec_cols = st.columns(5)
+for i, movie in top_recommendations.iterrows():
+    with rec_cols[i % 5]:
+        st.image(f"https://via.placeholder.com/300x450?text={movie['title']}", use_column_width=True)
+        st.markdown(f"**{movie['title']}**")
+        st.caption(f"⭐ {movie['vote_average']}")
+        st.caption(movie['overview'][:100] + "...")
